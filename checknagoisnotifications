@@ -1,0 +1,83 @@
+#!/usr/bin/env python
+#
+#  Program to read the status.log from nagios and look for notifications
+#  off, but have recovered.
+#
+#  Written by tummy.com, ltd.  <jafo@tummy.com>, 2010-11-16
+#  Released under the GPLv2.
+
+import re
+
+debug = 0
+
+nagiosFile = '/var/log/nagios/status.log'
+#nagiosFile = '/tmp/status.log'
+
+class NagiosStatus:
+	def __init__(self, filename):
+		self.filename = filename
+		self.hosts = {}
+		self.loadStatusFile()
+
+	def loadStatusFile(self):
+		fp = open(self.filename, 'r')
+		while True:
+			line = fp.readline()
+			if not line: break
+
+			m = re.match(r'^hoststatus\s+{\s*$', line)
+			if m:
+				if debug >= 2: print 'START OF HOST'
+				data = { 'services' : [] }
+				while True:
+					line = fp.readline()
+					if not line: break
+					if debug >= 2: print 'host: %s' % line.rstrip()
+					m2 = re.match(r'^\s+([^=]+)=(\S.*)*$', line.rstrip())
+					if not m2: break
+					data[m2.group(1)] = m2.group(2)
+				self.hosts[data['host_name']] = data
+				if debug >= 2: print 'END OF HOST'
+
+			m = re.match(r'^servicestatus\s+{\s*$', line)
+			if m:
+				if debug >= 2: print 'START OF SERVICE'
+				data = {}
+				while True:
+					line = fp.readline()
+					if not line: break
+					if debug >= 2: print 'service: %s' % line.rstrip()
+					m2 = re.match(r'^\s+([^=]+)=(.*)$', line.rstrip())
+					if not m2: break
+					data[m2.group(1)] = m2.group(2)
+				self.hosts[data['host_name']]['services'].append(data)
+				if debug >= 2: print 'END OF SERVICE'
+
+status = NagiosStatus(nagiosFile)
+for host in sorted(status.hosts.keys()):
+	host = status.hosts[host]
+
+	if host.get('notifications_enabled', None) == None:
+		print 'Host %s has no notifications_enabled line' % host['host_name']
+		continue
+
+	#  are there any hard states that aren't 0 or 1?
+	hardStates = [ x for x in
+			[ int(x['last_hard_state']) for x in host['services'] ]
+			if not x in [0,1] ]
+	needNewline = False
+	if host['notifications_enabled'] == '0' and not hardStates:
+		print ('Host %s has notifications disabled and all services ok'
+				% host['host_name'])
+		needNewline = True
+
+	for service in host['services']:
+		if debug: print '%s@%s' % ( service['check_command'], host['host_name'] )
+		if debug: print '   notifications_enabled: %(notifications_enabled)s  last_hard_state: %(last_hard_state)s' % service
+		if (int(service['notifications_enabled']) == 0
+				and int(service['last_hard_state']) in [0,1]):
+			print (('Service %(check_command)s@%(host_name)s\n'
+				'   has notifications disabled, but is ok') % service)
+			needNewline = True
+
+	if needNewline: print

@@ -1,0 +1,11 @@
+checknagiosnotifications
+2010-11-14
+Written by tummy.com, ltd.  <jafo@tummy.com>, 2010-11-16
+Released under the GPLv2.
+
+This program checks for services or hosts that have notifications disabled
+and alerts on them.
+
+Sorry, we wrote this for internal use and set it up and haven't touched it
+since then, so this documentation is very thin.  We released it at the
+request of someone who wanted to use it.
